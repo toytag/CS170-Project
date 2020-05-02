@@ -30,6 +30,6 @@ plt.savefig("graph.png")
 plt.cla()
 
 T = nx.minimum_spanning_tree(G)
-nx.draw_circular(T)
+nx.draw_circular(T,with_labels=True)
 plt.savefig("tree.png")
 # ---------------------------- test ------------------------------
