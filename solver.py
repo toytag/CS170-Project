@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 
 
 
-def sort_append(l,n,d):
-    i = 0
-    while i < len(l):
-        if l[i][1] > d:
-            i += 1
-        else:
-            break
-    l.insert(i, (n,d))
+# def sort_append(l,n,d):
+#     i = 0
+#     while i < len(l):
+#         if l[i][1] > d:
+#             i += 1
+#         else:
+#             break
+#     l.insert(i, (n,d))
 
 
 
@@ -27,49 +27,50 @@ def solve(G):
     Returns:
         T: networkx.Graph
     """
-
-    # TODO: your code here!
-
-    G_1 = G
-    reachable_node = []
-    sorted_degree = []
-
-    # 去掉所有 degree 为 1 的点
-
-    for node in G.nodes():
-        if len(G[node]) == 1:
-            G_1.remove_node(node)
-
-    T = nx.minimum_spanning_tree(G_1)
-
-    i = 0
-    while i < T.number_of_nodes():
-        if len(T[node]) == 1:
-            fail = 0
-            for neighbor in G[node]:
-                flag = 0
-                for adj in G[neighbor]:
-                    if adj in T.nodes():
-                        flag = 1
-                        break
-                if flag == 0:
-                    fail = 1
-                    break
-            if fail == 0:
-                T.remove_node(node)
-                i -= 1
-        i += 1
-        
+    T = nx.minimum_spanning_tree(G)
+    d1_vs = [v for v, d in T.degree() if d == 1]
+    for v in d1_vs:
+        T_tmp = T.copy()
+        T_tmp.remove_node(v)
+        if average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
+            T.remove_node(v)
     return T
 
-                
+    # ----------------------------------------------------------------
 
+    # G_1 = G
+    # reachable_node = []
+    # sorted_degree = []
 
+    # # 去掉所有 degree 为 1 的点
 
+    # for node in G.nodes():
+    #     if len(G[node]) == 1:
+    #         G_1.remove_node(node)
 
+    # T = nx.minimum_spanning_tree(G_1)
 
+    # i = 0
+    # while i < T.number_of_nodes():
+    #     if len(T[node]) == 1:
+    #         fail = 0
+    #         for neighbor in G[node]:
+    #             flag = 0
+    #             for adj in G[neighbor]:
+    #                 if adj in T.nodes():
+    #                     flag = 1
+    #                     break
+    #             if flag == 0:
+    #                 fail = 1
+    #                 break
+    #         if fail == 0:
+    #             T.remove_node(node)
+    #             i -= 1
+    #     i += 1
+        
+    # return T
 
-
+    # ----------------------------------------------------------------
 
     # # 1. 不添加所有degree为1的点
     # # 2. 添加所有链接degree为1的点的点
@@ -128,12 +129,10 @@ def solve(G):
 # Usage: python3 solver.py test.in
 
 if __name__ == '__main__':
-     assert len(sys.argv) == 2
-     path = sys.argv[1]
-     G = read_input_file(path)
-     T = solve(G)
-    #  nx.draw_circular(T,with_labels=True)
-    #  plt.savefig("tree.png")
-     assert is_valid_network(G, T)
-     print("Average  pairwise distance: {}".format(average_pairwise_distance(T)))
-     write_output_file(T, 'test.out')
+    assert len(sys.argv) == 2
+    path = sys.argv[1]
+    G = read_input_file(path)
+    T = solve(G)
+    assert is_valid_network(G, T)
+    print("Average pairwise distance: {}".format(average_pairwise_distance(T)))
+    write_output_file(T, 'outputs/test.out')
