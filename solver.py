@@ -2,8 +2,8 @@ import networkx as nx
 from parse import read_input_file, write_output_file
 from utils import is_valid_network, average_pairwise_distance
 import sys
-
-
+import numpy as np
+from itertools import combinations
 import matplotlib.pyplot as plt
 
 
@@ -18,6 +18,57 @@ import matplotlib.pyplot as plt
 #     l.insert(i, (n,d))
 
 
+def solve_from_src(G, src):
+    T = nx.Graph()
+    T.add_nodes_from(G)
+    for dst, path in nx.single_source_dijkstra_path(G, source=src).items():
+        if len(path) >= 2:
+            for u, v in zip(path[:-1], path[1:]):
+                T.add_edge(u, v, weight=G[u][v]["weight"])
+    while True:
+        converge = True
+        d1_vs = sorted([v for v, d in T.degree() if d == 1], key=lambda v: G.degree(v))
+        for v in d1_vs:
+            T_tmp = T.copy()
+            T_tmp.remove_node(v)
+            if nx.is_dominating_set(G, T_tmp.nodes) and average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
+                converge = False
+                T.remove_node(v)
+        if converge:
+            break
+    return T
+
+def prune(G, T):
+    while True:
+        converge = True
+        d1_vs = sorted([v for v, d in T.degree() if d == 1], key=lambda v: G.degree(v))
+        for v in d1_vs:
+            T_tmp = T.copy()
+            T_tmp.remove_node(v)
+            if nx.is_dominating_set(G, T_tmp.nodes) and average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
+                converge = False
+                T.remove_node(v)
+        if converge:
+            break
+    return T
+
+
+def BruteForce(G, n):
+    num = G.size if n > G.size else n
+    optimalT = nx.Graph()
+    nodes = G.nodes.items()
+    minAvgDistance = INT_MAX
+    for chosen in combinations(nodes, num):
+        T = nx.minimum_spanning_tree(G)
+        T = prune(G, T)
+        apd = average_pairwise_distance(T)
+        if apd < minAvgDistance:
+            minAvgDistance = apd
+            optimalT = T.copy()
+    
+    return optimalT
+
+
 
 def solve(G):
     """
@@ -27,14 +78,72 @@ def solve(G):
     Returns:
         T: networkx.Graph
     """
-    T = nx.minimum_spanning_tree(G)
-    d1_vs = [v for v, d in T.degree() if d == 1]
-    for v in d1_vs:
-        T_tmp = T.copy()
-        T_tmp.remove_node(v)
-        if average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
-            T.remove_node(v)
-    return T
+
+    counter = {node: 0 for node in G.nodes()}
+    for src, dsts in nx.all_pairs_dijkstra_path(G):
+        for dst, path in dsts.items():
+            for node in path[1:-1]:
+                counter[node] += 1
+    sources = sorted(counter.items(), key=lambda x: x[-1], reverse=True)
+
+    if len(sources) > 5:
+        sources = sources[:5]
+
+    Ts = []
+    for src in sources:
+        T = solve_from_src(G, src[0])
+        Ts.append([T, average_pairwise_distance(T)])
+
+    return min(Ts, key=lambda x: x[-1])[0]
+
+    # ----------------------------------------------------------------
+
+    # counter = {node: 0 for node in G.nodes()}
+    # for src, dsts in nx.all_pairs_dijkstra_path(G):
+    #     for dst, path in dsts.items():
+    #         for node in path[1:-1]:
+    #             counter[node] += 1
+    # cur, cur_degree = sorted(counter.items(), key=lambda x: x[-1], reverse=True)[0]
+
+    # T = nx.Graph()
+    # T.add_nodes_from(G)
+    # for dst, path in nx.single_source_dijkstra_path(G, source=cur).items():
+    #     if len(path) >= 2:
+    #         for u, v in zip(path[:-1], path[1:]):
+    #             T.add_edge(u, v, weight=G[u][v]["weight"])
+
+    # while True:
+    #     converge = True
+    #     d1_vs = [v for v, d in T.degree() if d == 1]
+    #     for v in d1_vs:
+    #         T_tmp = T.copy()
+    #         T_tmp.remove_node(v)
+    #         if is_valid_network(G, T_tmp) and average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
+    #             converge = False
+    #             T.remove_node(v)
+    #     if converge:
+    #         break
+    # return T
+
+    # ----------------------------------------------------------------
+    
+    # cost = 0
+    # while len(reachable_node) < len(G.nodes()):
+    #     for neighbor in G[cur]:
+            
+    # nx.single_source_dijkstra_path(G, source=)
+    
+    # T = nx.minimum_spanning_tree(G)
+    # d1_vs = [v for v, d in T.degree() if d == 1]
+
+    # # T.degree().sort(key=lambda x: x[-1])
+
+    # for v in d1_vs:
+    #     T_tmp = T.copy()
+    #     T_tmp.remove_node(v)
+    #     if average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
+    #         T.remove_node(v)
+    # return T
 
     # ----------------------------------------------------------------
 
@@ -121,6 +230,8 @@ def solve(G):
 # Here's an example of how to run your solver.
 
 # Usage: python3 solver.py test.in
+
+
 
 if __name__ == '__main__':
     assert len(sys.argv) == 2

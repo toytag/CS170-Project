@@ -101,3 +101,9 @@ def average_pairwise_distance_fast(T):
             w = T[c][p]["weight"]
             cost += 2 * a * b * w
     return cost / (len(T) * (len(T) - 1))
+
+    def coverRate(G, T):
+        size = G.size()
+        covered = Set()
+        
+        
