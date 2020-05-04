@@ -3,5 +3,5 @@ __pycache__/
 .DS_Store
 *.ipynb
 *.json
-outputs/
-test.*
+*.in
+*.out

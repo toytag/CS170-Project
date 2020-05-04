@@ -100,10 +100,4 @@ def average_pairwise_distance_fast(T):
             a, b = subtree_sizes[c], len(T.nodes) - subtree_sizes[c]
             w = T[c][p]["weight"]
             cost += 2 * a * b * w
-    return cost / (len(T) * (len(T) - 1))
-
-    def coverRate(G, T):
-        size = G.size()
-        covered = Set()
-        
-        
+    return cost / (len(T) * (len(T) - 1))        

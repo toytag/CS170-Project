@@ -1,73 +1,150 @@
-import networkx as nx
-from parse import read_input_file, write_output_file
-from utils import is_valid_network, average_pairwise_distance
 import sys
+import random
 import numpy as np
-from itertools import combinations
+import networkx as nx
 import matplotlib.pyplot as plt
+from itertools import combinations
+from parse import read_input_file, write_output_file
+from utils import is_valid_network, average_pairwise_distance, average_pairwise_distance_fast
 
 
-
-# def sort_append(l,n,d):
-#     i = 0
-#     while i < len(l):
-#         if l[i][1] > d:
-#             i += 1
-#         else:
-#             break
-#     l.insert(i, (n,d))
+NUM_SAMPLE = 3
 
 
-def solve_from_src(G, src):
+def minimum_spanning_tree_solution(G):
+    T = nx.minimum_spanning_tree(G)
+
+    Ts = []
+    for _ in range(NUM_SAMPLE):
+        Ts.append(expand(G, prune(G, T.copy())))
+
+    return min(Ts, key=lambda T: average_pairwise_distance_fast(T))
+
+
+def single_source_dijkstra_path_tree_solution(G, src):
     T = nx.Graph()
     T.add_nodes_from(G)
     for dst, path in nx.single_source_dijkstra_path(G, source=src).items():
         if len(path) >= 2:
             for u, v in zip(path[:-1], path[1:]):
                 T.add_edge(u, v, weight=G[u][v]["weight"])
+
+    Ts = []
+    for _ in range(NUM_SAMPLE):
+        Ts.append(expand(G, prune(G, T.copy(), src)))
+
+    return min(Ts, key=lambda T: average_pairwise_distance_fast(T))
+
+
+def single_source_random_tree_solution(G, src):
+    G_tmp = G.copy()
+    for u, v in G_tmp.edges:
+        G_tmp[u][v]['random'] = random.uniform(0, 1)
+    T = nx.minimum_spanning_tree(G_tmp, weight='random')
+
+    Ts = []
+    for _ in range(NUM_SAMPLE):
+        Ts.append(expand(G, prune(G, T.copy(), src)))
+
+    return min(Ts, key=lambda T: average_pairwise_distance_fast(T))
+
+
+def prune(G, T, src=None):
+    closed = set([src])
     while True:
-        converge = True
-        d1_vs = sorted([v for v, d in T.degree() if d == 1], key=lambda v: G.degree(v))
-        for v in d1_vs:
-            T_tmp = T.copy()
-            T_tmp.remove_node(v)
-            if nx.is_dominating_set(G, T_tmp.nodes) and average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
-                converge = False
-                T.remove_node(v)
-        if converge:
+        d1_vs = set([v for v, d in T.degree() if d == 1])
+        if len(d1_vs) == 0 or d1_vs.issubset(closed):
             break
+        v = random.sample(d1_vs.difference(closed), 1)[0]
+        T_tmp = T.copy()
+        T_tmp.remove_node(v)
+        if is_valid_network(G, T_tmp):
+            T.remove_node(v)
+        closed.add(v)
     return T
 
-def prune(G, T):
+
+def expand(G, T, src=None):
+    closed = set()
+    baseline = average_pairwise_distance_fast(T)
     while True:
-        converge = True
-        d1_vs = sorted([v for v, d in T.degree() if d == 1], key=lambda v: G.degree(v))
-        for v in d1_vs:
-            T_tmp = T.copy()
-            T_tmp.remove_node(v)
-            if nx.is_dominating_set(G, T_tmp.nodes) and average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
-                converge = False
-                T.remove_node(v)
-        if converge:
+        tree_nodes = set(T.nodes)
+        if tree_nodes.issubset(closed):
             break
+        u = random.sample(tree_nodes.difference(closed), 1)[0]
+        neighbors = list(nx.all_neighbors(G, u))
+        random.shuffle(neighbors)
+        for v in neighbors:
+            if v not in T:
+                T_tmp = T.copy()
+                T_tmp.add_edge(u, v, weight=G[u][v]["weight"])
+                new_baseline = average_pairwise_distance_fast(T_tmp)
+                if new_baseline < baseline:
+                    T.add_edge(u, v, weight=G[u][v]["weight"])
+                    baseline = new_baseline
+        closed.add(u)
     return T
 
 
-def BruteForce(G, n):
-    num = G.size if n > G.size else n
+def BFprune(G, T):
+    closed = set()
+    baseline = average_pairwise_distance_fast(T)
+    while True:
+        d1_vs = set([v for v, d in T.degree() if d == 1])
+        if len(d1_vs) == 0 or d1_vs.issubset(closed):
+            break
+        v = random.sample(d1_vs.difference(closed), 1)[0]
+        # print(v)
+        T_tmp = T.copy()
+        T_tmp.remove_node(v)
+        new_baseline = average_pairwise_distance_fast(T_tmp)
+        if nx.is_dominating_set(G, T_tmp.nodes) and new_baseline < baseline:
+            T.remove_node(v)
+            baseline = new_baseline
+        closed.add(v)
+    return T
+
+
+def BruteForce(G, n, graph_name=None):
+    if n >= len(G.nodes):
+        if len(G.nodes) > 25:
+            num = len(G.nodes) - 8
+        elif (len(G.nodes) <= 5):
+            num = 1
+        else:
+            num = len(G.nodes) - 5
+    else:
+        num = n
     optimalT = nx.Graph()
-    nodes = G.nodes.items()
-    minAvgDistance = INT_MAX
+    nodes = G.nodes
+    minAvgDistance = float('inf')
+    counter = 0
     for chosen in combinations(nodes, num):
-        T = nx.minimum_spanning_tree(G)
-        T = prune(G, T)
-        apd = average_pairwise_distance(T)
-        if apd < minAvgDistance:
-            minAvgDistance = apd
-            optimalT = T.copy()
-    
-    return optimalT
+        copyG = G.copy()
+        # print(copyG.nodes)
+        for node in nodes:
+            if node not in chosen:
+                copyG.remove_node(node)
 
+        for i in range(1):
+            T = nx.minimum_spanning_tree(copyG)
+            # T = randomMST(copyG)
+            if ((nx.is_empty(T)) or (not nx.is_tree(T)) or (not nx.is_connected(T)) or (not is_valid_network(G, T))):
+                continue
+
+            T = BFprune(G, T)
+
+            if ((nx.is_empty(T)) or (not nx.is_tree(T)) or (not nx.is_connected(T)) or (not is_valid_network(G, T))):
+                continue
+            # print(T.nodes)
+            apd = average_pairwise_distance_fast(T)
+            if apd < minAvgDistance:
+                minAvgDistance = apd
+                optimalT = T.copy()
+                if minAvgDistance == 0:
+                    break
+
+    return optimalT
 
 
 def solve(G):
@@ -84,155 +161,31 @@ def solve(G):
         for dst, path in dsts.items():
             for node in path[1:-1]:
                 counter[node] += 1
-    sources = sorted(counter.items(), key=lambda x: x[-1], reverse=True)
+    transbays = sorted(counter.keys(), key=lambda v: counter[v], reverse=True)
+    maxDegrees = sorted(G.nodes, key=lambda v: G.degree(v), reverse=True)
 
-    if len(sources) > 5:
-        sources = sources[:5]
+    transbays = transbays[:5] if len(transbays) > 5 else transbays
+    maxDegrees = maxDegrees[:5] if len(maxDegrees) > 5 else maxDegrees
+    sources = set(transbays + maxDegrees)
 
-    Ts = []
+    Ts = [minimum_spanning_tree_solution(G)]
     for src in sources:
-        T = solve_from_src(G, src[0])
-        Ts.append([T, average_pairwise_distance(T)])
+        Ts.append(single_source_dijkstra_path_tree_solution(G, src))
+        for _ in range(NUM_SAMPLE):
+            Ts.append(single_source_random_tree_solution(G, src))
 
-    return min(Ts, key=lambda x: x[-1])[0]
+# -------------- if you feel like you don't have enough computing power, you can comment code block below --------------
+    if len(G.nodes()) <= 25:
+        bfT = BruteForce(G, 20)
+        if ((not nx.is_empty(bfT)) and (nx.is_tree(bfT)) and (nx.is_connected(bfT)) and (is_valid_network(G, bfT))):
+            Ts.append(bfT)
+# ----------------------------------------------------------------------------------------------------------------------
 
-    # ----------------------------------------------------------------
-
-    # counter = {node: 0 for node in G.nodes()}
-    # for src, dsts in nx.all_pairs_dijkstra_path(G):
-    #     for dst, path in dsts.items():
-    #         for node in path[1:-1]:
-    #             counter[node] += 1
-    # cur, cur_degree = sorted(counter.items(), key=lambda x: x[-1], reverse=True)[0]
-
-    # T = nx.Graph()
-    # T.add_nodes_from(G)
-    # for dst, path in nx.single_source_dijkstra_path(G, source=cur).items():
-    #     if len(path) >= 2:
-    #         for u, v in zip(path[:-1], path[1:]):
-    #             T.add_edge(u, v, weight=G[u][v]["weight"])
-
-    # while True:
-    #     converge = True
-    #     d1_vs = [v for v, d in T.degree() if d == 1]
-    #     for v in d1_vs:
-    #         T_tmp = T.copy()
-    #         T_tmp.remove_node(v)
-    #         if is_valid_network(G, T_tmp) and average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
-    #             converge = False
-    #             T.remove_node(v)
-    #     if converge:
-    #         break
-    # return T
-
-    # ----------------------------------------------------------------
-    
-    # cost = 0
-    # while len(reachable_node) < len(G.nodes()):
-    #     for neighbor in G[cur]:
-            
-    # nx.single_source_dijkstra_path(G, source=)
-    
-    # T = nx.minimum_spanning_tree(G)
-    # d1_vs = [v for v, d in T.degree() if d == 1]
-
-    # # T.degree().sort(key=lambda x: x[-1])
-
-    # for v in d1_vs:
-    #     T_tmp = T.copy()
-    #     T_tmp.remove_node(v)
-    #     if average_pairwise_distance(T_tmp) <= average_pairwise_distance(T):
-    #         T.remove_node(v)
-    # return T
-
-    # ----------------------------------------------------------------
-
-    # G_1 = G
-    # reachable_node = []
-    # sorted_degree = []
-
-    # # 去掉所有 degree 为 1 的点
-
-    # for node in G.nodes():
-    #     if len(G[node]) == 1:
-    #         G_1.remove_node(node)
-
-    # T = nx.minimum_spanning_tree(G_1)
-
-    # i = 0
-    # while i < T.number_of_nodes():
-    #     if len(T[node]) == 1:
-    #         fail = 0
-    #         for neighbor in G[node]:
-    #             flag = 0
-    #             for adj in G[neighbor]:
-    #                 if adj in T.nodes():
-    #                     flag = 1
-    #                     break
-    #             if flag == 0:
-    #                 fail = 1
-    #                 break
-    #         if fail == 0:
-    #             T.remove_node(node)
-    #             i -= 1
-    #     i += 1
-        
-    # return T
-
-    # ----------------------------------------------------------------
-
-    # # 1. 不添加所有degree为1的点
-    # # 2. 添加所有链接degree为1的点的点
-    # for node, degree in G.degree():
-    #     # print(node, degree)
-    #     if degree == 1:
-    #         for neighbor in G.neighbors(node):  # only one neighbor
-    #             N.add_node(neighbor)
-    #         for reach in G.neighbors(neighbor):
-    #             reachable_node.append(reach)
-    #     else:
-    #         sort_append(sorted_degree, node, degree)
-
-    # print(N.nodes())
-
-    ### 从 degree 最大的点开始：
-    # 1.找 degree 最大的
-    # start = sorted_degree[0][0]
-    # while len(reachable_node) < G.number_of_nodes():
-    #     max_degree = 0
-    #     next = None
-    #     for neighbor in G[start]:
-    #         reachable_node.append(neighbor)
-    #         if len(G[neighbor]) > max_d"egree:
-    #             max_degree = len(G[neighbor])
-    #             next = neighbor
-            
-            
-
-    # #while 
-    # for (node, degree) in sorted_degree:
-
-    #     if node not in reachable_node:
-    #         N.add_node(node)
-    #         for reach in G.neighbors(node):
-    #             reachable_node.append(reach)
-
-    # Nnodes = N.nodes()
-    # print(Nnodes)
-    # for (x, y) in G.edges():
-    #     if x in Nnodes and y in Nnodes:
-    #         N.add_edge(x, y, weight=G[x][y]['weight'])
-
-
-    # return N
+    return min(Ts, key=lambda T: average_pairwise_distance_fast(T))
 
 
 # Here's an example of how to run your solver.
-
 # Usage: python3 solver.py test.in
-
-
-
 if __name__ == '__main__':
     assert len(sys.argv) == 2
     path = sys.argv[1]
